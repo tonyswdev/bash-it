@@ -13,11 +13,29 @@ disable-proxy ()
 	unset ALL_PROXY
 	unset no_proxy
 	unset NO_PROXY
-	echo "Disabled proxy environment variables"
+	touch "$BASH_IT_CONFIG/proxy-disabled"
+	# echo "Disabled proxy environment variables"
 
-	npm-disable-proxy
-	ssh-disable-proxy
-	svn-disable-proxy
+	# tony - only do git
+	git-global-disable-proxy
+	# npm-disable-proxy
+	# apm-disable-proxy
+	# ssh-disable-proxy
+	# svn-disable-proxy
+}
+
+init-proxy ()
+{
+	about 'Initializes the proxy settings for Bash, npm and SSH. If the proxy settings are currently disabled, nothing happens. Use this function in your Bash profile to safely initialize the proxy.'
+	group 'proxy'
+
+	if [ -e "$BASH_IT_CONFIG/proxy-disabled" ]; then
+		# Not enabling proxy settings - no-op
+		:
+	else
+		# Enabling proxy settings
+		enable-proxy
+	fi
 }
 
 enable-proxy ()
@@ -32,11 +50,17 @@ enable-proxy ()
 	export ALL_PROXY=$http_proxy
 	export no_proxy=$BASH_IT_NO_PROXY
 	export NO_PROXY=$no_proxy
-	echo "Enabled proxy environment variables"
+	if [ -e "$BASH_IT_CONFIG/proxy-disabled" ]; then
+		rm "$BASH_IT_CONFIG/proxy-disabled"
+	fi
+	# echo "Enabled proxy environment variables"
 
-	npm-enable-proxy
-	ssh-enable-proxy
-	svn-enable-proxy
+	# tony - only do git
+	git-global-enable-proxy
+	#npm-enable-proxy
+	#apm-enable-proxy
+	#ssh-enable-proxy
+	#svn-enable-proxy
 }
 
 enable-proxy-alt ()
@@ -54,6 +78,7 @@ enable-proxy-alt ()
 	echo "Enabled alternate proxy environment variables"
 
 	npm-enable-proxy $http_proxy $https_proxy
+	apm-enable-proxy $http_proxy $https_proxy
 	ssh-enable-proxy
 	svn-enable-proxy $http_proxy
 }
@@ -70,6 +95,7 @@ show-proxy ()
 
 	bash-it-show-proxy
 	npm-show-proxy
+	apm-show-proxy
 	git-global-show-proxy
 	svn-show-proxy
 	ssh-show-proxy
@@ -83,7 +109,7 @@ proxy-help ()
 	cat << EOF
 Bash-it provides support for enabling/disabling proxy settings for various shell tools.
 
-The following backends are currently supported (in addition to the shell's environment variables): Git, SVN, npm, ssh
+The following backends are currently supported (in addition to the shell's environment variables): Git, SVN, npm, apm (Atom package manager), ssh
 
 Bash-it uses the following variables to set the shell's proxy settings when you call 'enable-proxy'.
 These variables are best defined in a custom script in bash-it's custom script folder ('$BASH_IT/custom'),
@@ -145,9 +171,54 @@ npm-enable-proxy ()
 	local my_https_proxy=${2:-$BASH_IT_HTTPS_PROXY}
 
 	if $(command -v npm &> /dev/null) ; then
-		npm config set proxy $my_http_proxy
-		npm config set https-proxy $my_https_proxy
+		if [ -e "$my_http_proxy" ]; then
+			npm config set proxy $my_http_proxy
+		fi
+		if [ -e "$my_https_proxy" ]; then
+			npm config set https-proxy $my_https_proxy
+		fi
 		echo "Enabled npm proxy settings"
+	fi
+}
+
+apm-show-proxy ()
+{
+	about 'Shows the apm proxy settings'
+	group 'proxy'
+
+	if $(command -v apm &> /dev/null) ; then
+		echo ""
+		echo "apm"
+		echo "==="
+		echo "apm HTTP  proxy: " `apm config get proxy`
+		echo "apm HTTPS proxy: " `apm config get https-proxy`
+	fi
+}
+
+apm-disable-proxy ()
+{
+	about 'Disables apm proxy settings'
+	group 'proxy'
+
+	if $(command -v apm &> /dev/null) ; then
+		apm config delete proxy
+		apm config delete https-proxy
+		echo "Disabled apm proxy settings"
+	fi
+}
+
+apm-enable-proxy ()
+{
+	about 'Enables apm proxy settings'
+	group 'proxy'
+
+	local my_http_proxy=${1:-$BASH_IT_HTTP_PROXY}
+	local my_https_proxy=${2:-$BASH_IT_HTTPS_PROXY}
+
+	if $(command -v apm &> /dev/null) ; then
+		apm config set proxy $my_http_proxy
+		apm config set https-proxy $my_https_proxy
+		echo "Enabled apm proxy settings"
 	fi
 }
 
@@ -173,7 +244,7 @@ git-global-disable-proxy ()
 	if $(command -v git &> /dev/null) ; then
 		git config --global --unset-all http.proxy
 		git config --global --unset-all https.proxy
-		echo "Disabled global Git proxy settings"
+		# echo "Disabled global Git proxy settings"
 	fi
 }
 
@@ -183,11 +254,11 @@ git-global-enable-proxy ()
 	group 'proxy'
 
 	if $(command -v git &> /dev/null) ; then
-		git-global-disable-proxy
+		# git-global-disable-proxy # tony - why do this?
 
 		git config --global --add http.proxy $BASH_IT_HTTP_PROXY
 		git config --global --add https.proxy $BASH_IT_HTTPS_PROXY
-		echo "Enabled global Git proxy settings"
+		# echo "Enabled global Git proxy settings"
 	fi
 }
 
@@ -384,5 +455,74 @@ ssh-enable-proxy ()
 	if [ -f ~/.ssh/config ] ; then
 		sed -e's/#	ProxyCommand/	ProxyCommand/' -i ""  ~/.ssh/config
 		echo "Enabled SSH config proxy settings"
+	fi
+}
+
+mvn-show-proxy () {
+	about 'Shows Maven proxy settings'
+	group 'proxy'
+
+	if [ -f ~/.m2/settings.xml ] ; then
+		echo "Maven Proxy Settings"
+		echo "===================="
+		xsltproc - ~/.m2/settings.xml << EOF
+		<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+		  <xsl:output method="xml" omit-xml-declaration="yes" indent="yes"/>
+		  <xsl:strip-space elements="*"/>
+		  <xsl:template match="settings">
+		    <xsl:apply-templates select="proxies"/>
+		  </xsl:template>
+
+		  <xsl:template match="proxies">
+		    <xsl:copy-of select="*" />
+		  </xsl:template>
+		</xsl:stylesheet>
+EOF
+	fi
+}
+
+mvn-disable-proxy () {
+	about 'Disables Maven proxy settings'
+	group 'proxy'
+
+	if [ -f ~/.m2/settings.xml ] ; then
+		xsltproc -o ~/.m2/settings.xml - ~/.m2/settings.xml << EOF
+			<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+				<xsl:template match="node() | @*">
+					<xsl:copy>
+						<xsl:apply-templates select="node() | @*" />
+					</xsl:copy>
+				</xsl:template>
+
+				<xsl:template match="proxy/active">
+					<active>false</active>
+				</xsl:template>
+			</xsl:stylesheet>
+EOF
+
+		echo "Disabled Maven proxy settings"
+	fi
+}
+
+mvn-enable-proxy () {
+	about 'Enables Maven proxy settings'
+	group 'proxy'
+
+	if [ -f ~/.m2/settings.xml ] ; then
+		xsltproc -o ~/.m2/settings.xml - ~/.m2/settings.xml << EOF
+			<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+				<xsl:template match="node() | @*">
+					<xsl:copy>
+						<xsl:apply-templates select="node() | @*" />
+					</xsl:copy>
+				</xsl:template>
+
+				<xsl:template match="proxy/active">
+					<active>true</active>
+				</xsl:template>
+			</xsl:stylesheet>
+EOF
+
+		echo "Enabled Maven proxy settings"
 	fi
 }
